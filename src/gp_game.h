@@ -1,6 +1,9 @@
 #ifndef GP_GAME_H_
 #define GP_GAME_H_
 
+#include <stdint.h>
+#include <stdio.h>
+
 #define BOARD_WIDTH 100
 #define BOARD_HEIGHT 100
 
@@ -95,7 +98,8 @@ void print_agent(FILE *stream, const Agent *agent);
 
 typedef struct {
     Agent agents[AGENTS_COUNT];
-	Env board[BOARD_HEIGHT][BOARD_WIDTH];
+    size_t agent_map[BOARD_HEIGHT][BOARD_WIDTH];
+    Env board[BOARD_HEIGHT][BOARD_WIDTH];
 } Game;
 
 int random_int_range(int low, int high);
@@ -124,7 +128,7 @@ void load_game(const char *filepath, Game *game);
 
 int is_everyone_dead(const Game *game);
 
-void step_agent(Game* game, Agent *agent);
+void step_agent(Game* game, size_t agent_index);
 void execute_action(Game *game, size_t agent_index, Action action);
 void step_game(Game *game);
 

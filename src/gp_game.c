@@ -103,6 +103,7 @@ void init_game(Game *game)
         Coord pos = random_empty_coord_on_board(game);
         game->agents[i].pos = pos;
         game->board[pos.y][pos.x] = ENV_AGENT;
+        game->agent_map[pos.y][pos.x] = i;
         game->agents[i].dir = random_dir();
         game->agents[i].hunger = HUNGER_MAX;
         game->agents[i].health = HEALTH_MAX;
@@ -180,13 +181,15 @@ Coord coord_infront_of_agent(const Agent *agent)
     return result;
 }
 
-void step_agent(Game* game, Agent *agent)
+void step_agent(Game* game, size_t agent_index)
 {
+    Agent *agent = &game->agents[agent_index];
     Coord d = coord_dirs[agent->dir];
     game->board[agent->pos.y][agent->pos.x] = ENV_NOTHING;
     agent->pos.x = mod_int(agent->pos.x + d.x, BOARD_WIDTH);
     agent->pos.y = mod_int(agent->pos.y + d.y, BOARD_HEIGHT);
     game->board[agent->pos.y][agent->pos.x] = ENV_AGENT;
+    game->agent_map[agent->pos.y][agent->pos.x] = agent_index;
 }
 
 Agent *agent_infront_of_agent(Game *game, size_t agent_index)
@@ -196,14 +199,11 @@ Agent *agent_infront_of_agent(Game *game, size_t agent_index)
     if(game->board[infront.y][infront.x] != ENV_AGENT)
         return NULL;
 
-    for (size_t i = 0; i < AGENTS_COUNT; ++i) {
-        if (i != agent_index &&
-            game->agents[i].health > 0 &&
-            coord_equals(infront, game->agents[i].pos))
-        {
-            return &game->agents[i];
-        }
-    }
+    const size_t infront_agent_index = game->agent_map[infront.y][infront.x];
+    Agent* infront_agent = &game->agents[infront_agent_index];
+
+    if (infront_agent->health > 0 && coord_equals(infront, infront_agent->pos))
+        return infront_agent;
 
     return NULL;
 }
@@ -235,14 +235,14 @@ void execute_action(Game *game, size_t agent_index, Action action)
     case ACTION_STEP: {
         switch(env_infront_of_agent(game, agent_index)) {
             case ENV_NOTHING:
-                step_agent(game, &game->agents[agent_index]);
+                step_agent(game, agent_index);
                 break;
             case ENV_FOOD:
                 game->agents[agent_index].hunger += FOOD_HUNGER_RECOVERY;
                 if (game->agents[agent_index].hunger > HUNGER_MAX) {
                     game->agents[agent_index].hunger = HUNGER_MAX;
                 }
-                step_agent(game, &game->agents[agent_index]);
+                step_agent(game, agent_index);
                 break;
             case ENV_WALL:
                 break;
@@ -253,7 +253,7 @@ void execute_action(Game *game, size_t agent_index, Action action)
 
                     if (other_agent->health <= 0) {
                         game->agents[agent_index].hunger += FOOD_HUNGER_RECOVERY;
-                        step_agent(game, &game->agents[agent_index]);
+                        step_agent(game, agent_index);
                     }
                 }
                 break;
@@ -400,6 +400,7 @@ void make_next_generation(Game *prev_game, Game *next_game)
         Coord pos = random_empty_coord_on_board(next_game);
         next_game->agents[i].pos = pos;
         next_game->board[pos.y][pos.x] = ENV_AGENT;
+        next_game->agent_map[pos.y][pos.x] = i;
         next_game->agents[i].dir = random_dir();
         next_game->agents[i].hunger = HUNGER_MAX;
         next_game->agents[i].health = HEALTH_MAX;
