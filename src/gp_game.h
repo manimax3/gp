@@ -95,8 +95,7 @@ void print_agent(FILE *stream, const Agent *agent);
 
 typedef struct {
     Agent agents[AGENTS_COUNT];
-    int foods[BOARD_HEIGHT][BOARD_WIDTH];
-    int walls[BOARD_HEIGHT][BOARD_WIDTH];
+	Env board[BOARD_HEIGHT][BOARD_WIDTH];
 } Game;
 
 int random_int_range(int low, int high);
@@ -112,10 +111,10 @@ int is_cell_empty(const Game *game, Coord pos);
 Agent *agent_at(Game *game, Coord coord);
 
 Coord coord_infront_of_agent(const Agent *agent);
-int *food_infront_of_agent(Game *game, size_t agent_index);
+int food_infront_of_agent(Game *game, size_t agent_index);
 // TODO: implement O(1) lookup for agents
 Agent *agent_infront_of_agent(Game *game, size_t agent_index);
-int *wall_infront_of_agent(Game *game, size_t agent_index);
+int wall_infront_of_agent(Game *game, size_t agent_index);
 Env env_infront_of_agent(Game *game, size_t agent_index);
 
 void init_game(Game *game);
@@ -125,7 +124,7 @@ void load_game(const char *filepath, Game *game);
 
 int is_everyone_dead(const Game *game);
 
-void step_agent(Agent *agent);
+void step_agent(Game* game, Agent *agent);
 void execute_action(Game *game, size_t agent_index, Action action);
 void step_game(Game *game);
 

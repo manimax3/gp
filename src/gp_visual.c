@@ -43,7 +43,7 @@ void render_game(SDL_Renderer *renderer, const Game *game)
 
     for (int y = 0; y < BOARD_HEIGHT; ++y) {
         for (int x = 0; x < BOARD_WIDTH; ++x) {
-            if (game->foods[y][x]) {
+            if (game->board[y][x] == ENV_FOOD) {
                 filledCircleRGBA(
                     renderer,
                     (int) floorf(x * CELL_WIDTH + CELL_WIDTH * 0.5f),
@@ -52,7 +52,7 @@ void render_game(SDL_Renderer *renderer, const Game *game)
                     HEX_COLOR(FOOD_COLOR));
             }
 
-            if (game->walls[y][x]) {
+            if (game->board[y][x] == ENV_WALL) {
                 SDL_Rect rect = {
                     (int) floorf(x * CELL_WIDTH),
                     (int) floorf(y * CELL_HEIGHT),

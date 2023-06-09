@@ -73,21 +73,7 @@ Coord random_coord_on_board(void)
 
 int is_cell_empty(const Game *game, Coord pos)
 {
-    for (size_t i = 0; i < AGENTS_COUNT; ++i) {
-        if (coord_equals(game->agents[i].pos, pos)) {
-            return 0;
-        }
-    }
-
-    if (game->foods[pos.y][pos.x]) {
-        return 0;
-    }
-
-    if (game->walls[pos.y][pos.x]) {
-        return 0;
-    }
-
-    return 1;
+	return game->board[pos.y][pos.x] == ENV_NOTHING;
 }
 
 Coord random_empty_coord_on_board(const Game *game)
@@ -114,7 +100,9 @@ void init_game(Game *game)
     memset(game, 0, sizeof(*game));
 
     for (size_t i = 0; i < AGENTS_COUNT; ++i) {
-        game->agents[i].pos = random_empty_coord_on_board(game);
+        Coord pos = random_empty_coord_on_board(game);
+        game->agents[i].pos = pos;
+        game->board[pos.y][pos.x] = ENV_AGENT;
         game->agents[i].dir = random_dir();
         game->agents[i].hunger = HUNGER_MAX;
         game->agents[i].health = HEALTH_MAX;
@@ -131,12 +119,12 @@ void init_game(Game *game)
 
     for (size_t i = 0; i < FOODS_COUNT; ++i) {
         Coord pos = random_empty_coord_on_board(game);
-        game->foods[pos.y][pos.x] = 1;
+        game->board[pos.y][pos.x] = ENV_FOOD;
     }
 
     for (size_t i = 0; i < WALLS_COUNT; ++i) {
         Coord pos = random_empty_coord_on_board(game);
-        game->walls[pos.y][pos.x] = 1;
+        game->board[pos.y][pos.x] = ENV_WALL;
     }
 }
 
@@ -192,16 +180,21 @@ Coord coord_infront_of_agent(const Agent *agent)
     return result;
 }
 
-void step_agent(Agent *agent)
+void step_agent(Game* game, Agent *agent)
 {
     Coord d = coord_dirs[agent->dir];
+    game->board[agent->pos.y][agent->pos.x] = ENV_NOTHING;
     agent->pos.x = mod_int(agent->pos.x + d.x, BOARD_WIDTH);
     agent->pos.y = mod_int(agent->pos.y + d.y, BOARD_HEIGHT);
+    game->board[agent->pos.y][agent->pos.x] = ENV_AGENT;
 }
 
 Agent *agent_infront_of_agent(Game *game, size_t agent_index)
 {
     Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
+
+    if(game->board[infront.y][infront.x] != ENV_AGENT)
+        return NULL;
 
     for (size_t i = 0; i < AGENTS_COUNT; ++i) {
         if (i != agent_index &&
@@ -215,43 +208,22 @@ Agent *agent_infront_of_agent(Game *game, size_t agent_index)
     return NULL;
 }
 
-int *wall_infront_of_agent(Game *game, size_t agent_index)
+int wall_infront_of_agent(Game *game, size_t agent_index)
 {
     Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
-
-    if (game->walls[infront.y][infront.x]) {
-        return &game->walls[infront.y][infront.x];
-    }
-
-    return NULL;
+    return game->board[infront.y][infront.x] == ENV_WALL;
 }
 
-int *food_infront_of_agent(Game *game, size_t agent_index)
+int food_infront_of_agent(Game *game, size_t agent_index)
 {
     Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
-
-    if (game->foods[infront.y][infront.x]) {
-        return &game->foods[infront.y][infront.x];
-    }
-
-    return NULL;
+    return game->board[infront.y][infront.x] == ENV_FOOD;
 }
 
-Env env_of_agent(Game *game, size_t agent_index)
+Env env_infront_of_agent(Game *game, size_t agent_index)
 {
-    if (food_infront_of_agent(game, agent_index) != NULL) {
-        return ENV_FOOD;
-    }
-
-    if (wall_infront_of_agent(game, agent_index) != NULL) {
-        return ENV_WALL;
-    }
-
-    if (agent_infront_of_agent(game, agent_index) != NULL) {
-        return ENV_AGENT;
-    }
-
-    return ENV_NOTHING;
+    Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
+    return game->board[infront.y][infront.x];
 }
 
 void execute_action(Game *game, size_t agent_index, Action action)
@@ -261,26 +233,33 @@ void execute_action(Game *game, size_t agent_index, Action action)
         break;
 
     case ACTION_STEP: {
-        int *food = food_infront_of_agent(game, agent_index);
-        Agent *other_agent = agent_infront_of_agent(game, agent_index);
-        int *wall = wall_infront_of_agent(game, agent_index);
-
-        if (food != NULL) {
-            *food = 0;
-            game->agents[agent_index].hunger += FOOD_HUNGER_RECOVERY;
-            if (game->agents[agent_index].hunger > HUNGER_MAX) {
-                game->agents[agent_index].hunger = HUNGER_MAX;
-            }
-            step_agent(&game->agents[agent_index]);
-        } else if (other_agent != NULL) {
-            other_agent->health -= ATTACK_DAMAGE;
-
-            if (other_agent->health <= 0) {
+        switch(env_infront_of_agent(game, agent_index)) {
+            case ENV_NOTHING:
+                step_agent(game, &game->agents[agent_index]);
+                break;
+            case ENV_FOOD:
                 game->agents[agent_index].hunger += FOOD_HUNGER_RECOVERY;
-                step_agent(&game->agents[agent_index]);
-            }
-        } else if (wall == NULL) {
-            step_agent(&game->agents[agent_index]);
+                if (game->agents[agent_index].hunger > HUNGER_MAX) {
+                    game->agents[agent_index].hunger = HUNGER_MAX;
+                }
+                step_agent(game, &game->agents[agent_index]);
+                break;
+            case ENV_WALL:
+                break;
+            case ENV_AGENT: {
+                    Agent* other_agent = agent_infront_of_agent(game, agent_index);
+                    assert(other_agent && "This agent should be there");
+                    other_agent->health -= ATTACK_DAMAGE;
+
+                    if (other_agent->health <= 0) {
+                        game->agents[agent_index].hunger += FOOD_HUNGER_RECOVERY;
+                        step_agent(game, &game->agents[agent_index]);
+                    }
+                }
+                break;
+            default:
+                assert(0 && "This shouldnt happen");
+                break;
         }
     } break;
 
@@ -305,7 +284,7 @@ void step_game(Game *game)
             // Interpret genes
             for (size_t j = 0; j < JEANS_COUNT; ++j) {
                 Gene gene = game->agents[i].chromo.jeans[j];
-                if (gene.state == game->agents[i].state && gene.env == env_of_agent(game, i)) {
+                if (gene.state == game->agents[i].state && gene.env == env_infront_of_agent(game, i)) {
                     execute_action(game, i, gene.action);
                     game->agents[i].state = gene.next_state;
                     break;
@@ -316,6 +295,8 @@ void step_game(Game *game)
             game->agents[i].hunger -= STEP_HUNGER_DAMAGE;
             if (game->agents[i].hunger <= 0) {
                 game->agents[i].health = 0;
+                const Coord grave_pos = game->agents[i].pos;
+                game->board[grave_pos.y][grave_pos.x] = ENV_NOTHING;
             }
 
             game->agents[i].lifetime += 1;
@@ -399,12 +380,12 @@ void make_next_generation(Game *prev_game, Game *next_game)
 
     for (size_t i = 0; i < FOODS_COUNT; ++i) {
         Coord pos = random_empty_coord_on_board(next_game);
-        next_game->foods[pos.y][pos.x] = 1;
+        next_game->board[pos.y][pos.x] = ENV_FOOD;
     }
 
     for (size_t i = 0; i < WALLS_COUNT; ++i) {
         Coord pos = random_empty_coord_on_board(next_game);
-        next_game->walls[pos.y][pos.x] = 1;
+        next_game->board[pos.y][pos.x] = ENV_WALL;
     }
 
     for (size_t i = 0; i < AGENTS_COUNT; ++i) {
@@ -416,7 +397,9 @@ void make_next_generation(Game *prev_game, Game *next_game)
                     &next_game->agents[i]);
         mutate_agent(&next_game->agents[i]);
 
-        next_game->agents[i].pos = random_empty_coord_on_board(next_game);
+        Coord pos = random_empty_coord_on_board(next_game);
+        next_game->agents[i].pos = pos;
+        next_game->board[pos.y][pos.x] = ENV_AGENT;
         next_game->agents[i].dir = random_dir();
         next_game->agents[i].hunger = HUNGER_MAX;
         next_game->agents[i].health = HEALTH_MAX;
