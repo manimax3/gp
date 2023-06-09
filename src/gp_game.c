@@ -42,8 +42,23 @@ const char *action_as_cstr(Action action)
     assert(0 && "Unreachable");
 }
 
+static int topo_sort_chromo(const void* a, const void* b)
+{
+    const Gene* gene_a = a;
+    const Gene* gene_b = b;
+    if (gene_a->state != gene_b->state)
+        return gene_a->state - gene_b->state;
+    if (gene_a->env != gene_b->env)
+        return gene_a->env - gene_b->env;
+    if (gene_a->action != gene_b->action)
+        return gene_a->action - gene_b->action;
+
+    return gene_a->next_state - gene_b->next_state;
+}
+
 void print_chromo(FILE *stream, const Chromo *chromo)
 {
+    qsort((Gene*)chromo->jeans, JEANS_COUNT, sizeof(Gene), topo_sort_chromo);
     for (size_t i = 0; i < JEANS_COUNT; ++i) {
         fprintf(stream, "%d %s %s %d\n",
                 chromo->jeans[i].state,
@@ -206,18 +221,6 @@ Agent *agent_infront_of_agent(Game *game, size_t agent_index)
         return infront_agent;
 
     return NULL;
-}
-
-int wall_infront_of_agent(Game *game, size_t agent_index)
-{
-    Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
-    return game->board[infront.y][infront.x] == ENV_WALL;
-}
-
-int food_infront_of_agent(Game *game, size_t agent_index)
-{
-    Coord infront = coord_infront_of_agent(&game->agents[agent_index]);
-    return game->board[infront.y][infront.x] == ENV_FOOD;
 }
 
 Env env_infront_of_agent(Game *game, size_t agent_index)
